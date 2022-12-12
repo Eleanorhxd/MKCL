@@ -1,0 +1,250 @@
+import numpy as np
+import torch
+import torch.nn as nn
+
+from modules.base_cmn import BaseCMN
+from modules.visual_extractor import VisualExtractor
+from torch.nn.parameter import Parameter
+from modules.contrastive_loss import SupConLoss
+
+# 新加
+class GCN(nn.Module):
+
+    def __init__(self, in_size, state_size):
+        super(GCN, self).__init__()
+
+
+        self.gcn1 = GraphConvolutionLayer(in_size, state_size)
+        self.gcn2 = GraphConvolutionLayer(in_size, state_size)
+        self.gcn3 = GraphConvolutionLayer(in_size, state_size)
+
+    def forward(self, states, fw_A, bw_A):
+        states = states.permute(0, 2, 1)
+        states = self.gcn1(states, fw_A, bw_A)#.to('cuda:0')
+        states = self.gcn2(states, fw_A, bw_A)#.to('cuda:0')
+        states = self.gcn3(states, fw_A, bw_A)#.to('cuda:0')
+
+        return states.permute(0, 2, 1)
+class GCLayer(nn.Module):
+
+    def __init__(self, in_size, state_size):
+        super().__init__()
+        self.condense = nn.Conv1d(in_size, state_size, 1, bias=False)
+        self.condense_norm = nn.BatchNorm1d(state_size)
+        self.fw_trans = nn.Conv1d(in_size, state_size, 1, bias=False)
+        self.fw_norm = nn.BatchNorm1d(state_size)
+        self.bw_trans = nn.Conv1d(in_size, state_size, 1, bias=False)
+        self.bw_norm = nn.BatchNorm1d(state_size)
+        self.update = nn.Conv1d(3 * state_size, in_size, 1, bias=False)
+        self.update_norm = nn.BatchNorm1d(in_size)
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, states, fw_A, bw_A):
+        # states: batch size x feat size x nodes
+        condensed = self.relu(self.condense_norm(self.condense(states)))
+        fw_msg = self.relu(self.fw_norm(self.fw_trans(states).bmm(fw_A)))
+        bw_msg = self.relu(self.bw_norm(self.bw_trans(states).bmm(bw_A)))
+        updated = self.update_norm(self.update(torch.cat((condensed, fw_msg, bw_msg), dim=1)))
+        updated = self.relu(updated + states)
+        return updated
+
+
+class GraphConvolutionLayer(nn.Module):
+
+    def __init__(self, in_size, state_size):
+        super(GraphConvolutionLayer, self).__init__()
+
+        self.in_size = in_size
+        self.state_size = state_size
+
+        self.condense = nn.Conv1d(in_size, state_size, 1)
+        self.condense_norm = nn.BatchNorm1d(state_size)
+
+        self.gcn_forward = GraphConvolution(in_size, state_size)
+        self.gcn_backward = GraphConvolution(in_size, state_size)
+
+        self.relu = nn.ReLU(inplace=True)
+        self.dropout = nn.Dropout(0.5)
+
+        self.conv1d = nn.Conv1d(3 * state_size, in_size, 1, bias=False)
+        self.norm = nn.BatchNorm1d(in_size)
+
+        self.test_conv = nn.Conv1d(state_size, in_size, 1, bias=False)
+
+    def forward(self, x, fw_A, bw_A):
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+        states = x
+        condensed_message = self.relu(self.condense_norm(self.condense(x)))
+        fw_message = self.relu(self.gcn_forward(x, fw_A)).to(device)
+        bw_message = self.relu(self.gcn_backward(x, bw_A)).to(device)
+        update = torch.cat((condensed_message, fw_message, bw_message), dim=1)
+        x = self.norm(self.conv1d(update))
+        x = self.relu(x + states)
+
+        return x
+
+
+class GraphConvolution(nn.Module):
+
+    def __init__(self, in_features, out_features, bias=True):
+        super(GraphConvolution, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+
+
+        if bias:
+            self.bias = Parameter(torch.FloatTensor(out_features))
+        else:
+            self.register_parameter('bias', None)
+
+    def reset_parameters_xavier(self):
+        nn.init.xavier_normal_(self.weight.data, gain=0.02)  # Implement Xavier Uniform
+        if self.bias is not None:
+            nn.init.constant_(self.bias.data, 0.0)
+
+    def forward(self, x, adj):
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+        x = x.permute(0, 2, 1).to(device)
+        self.weight = Parameter(torch.FloatTensor(x.size()[0], self.in_features, self.out_features).to('cuda:0'))
+        self.reset_parameters_xavier()
+        support = torch.bmm(x, self.weight).to(device)
+        output = torch.bmm(adj, support).to(device)
+
+
+        if self.bias is not None:
+            return (output + self.bias).permute(0, 2, 1)
+        else:
+            return output.permute(0, 2, 1)
+
+    def __repr__(self):
+        return self.__class__.__name__ + ' (' \
+               + str(self.in_features) + ' -> ' \
+               + str(self.out_features) + ')'
+
+class ClsAttention(nn.Module):
+
+    def __init__(self, feat_size, num_classes):
+        super().__init__()
+        self.feat_size = feat_size
+        self.num_classes = num_classes
+        self.channel_w = nn.Conv2d(feat_size, num_classes, 1) # , bias=False
+
+    def forward(self, feats):
+        # feats: batch size x feat size x H x W
+        batch_size, feat_size , H, W = feats.size()
+        att_maps = self.channel_w(feats)
+        att_maps = torch.softmax(att_maps.view(batch_size, self.num_classes, -1), dim=2)
+        feats_t = feats.view(batch_size, feat_size, H * W).permute(0, 2, 1)
+        cls_feats = torch.bmm(att_maps, feats_t)
+        return cls_feats
+
+
+class Attention(nn.Module):
+
+    def __init__(self, k_size, v_size, affine_size=512):
+        super().__init__()
+        self.affine_k = nn.Linear(k_size, affine_size, bias=False)
+        self.affine_v = nn.Linear(v_size, affine_size, bias=False)
+        self.affine = nn.Linear(affine_size, 1, bias=False)
+
+    def forward(self, k, v):
+        # k: batch size x hidden size
+        # v: batch size x spatial size x hidden size
+        # z: batch size x spatial size
+        content_v = self.affine_k(k).unsqueeze(1) + self.affine_v(v)
+        z = self.affine(torch.tanh(content_v)).squeeze(2)
+        alpha = torch.softmax(z, dim=1)
+        context = (v * alpha.unsqueeze(2)).sum(dim=1)
+        return context, alpha
+
+
+class BaseCMNModel(nn.Module):
+    def __init__(self, args, tokenizer, num_classes, fw_adj, bw_adj, feat_size=2048, embed_size=256, hidden_size=512): #, num_classes, fw_adj, bw_adj, feat_size=1024, embed_size=256, hidden_size=512
+        super(BaseCMNModel, self).__init__()
+        self.args = args
+        self.num_classes = num_classes
+        self.tokenizer = tokenizer
+        self.fw_adj = fw_adj
+        self.bw_adj = bw_adj
+        self.feat_size = feat_size
+        self.embed_size = embed_size
+        self.hidden_size = hidden_size
+        self.visual_extractor = VisualExtractor(args)
+        self.encoder_decoder = BaseCMN(args, tokenizer,)
+        self.cls_atten = ClsAttention(feat_size, num_classes) # 空间注意力
+        self.gcn = GCN(feat_size, feat_size // 4)   # feat_size // 4
+        self.atten = Attention(hidden_size, feat_size)
+        self.zjxd = torch.nn.Linear(62, 98) #（62，98）(82,98)
+        self.zjxd_2 = torch.nn.Linear(32, 31) #（32，31） (42,41)
+
+        # pretrained embeddings
+        # self.embed = nn.Embedding.from_pretrained(torch.tensor(embds.vectors, dtype=torch.float64))
+        self.init_sent_h = nn.Linear(2 * feat_size // 2, hidden_size)
+        self.init_sent_c = nn.Linear(2 * feat_size // 2, hidden_size)
+
+        fw_D = torch.diag_embed(fw_adj.sum(dim=1))
+        bw_D = torch.diag_embed(bw_adj.sum(dim=1))
+        inv_sqrt_fw_D = fw_D.pow(-0.5)
+        inv_sqrt_fw_D[torch.isinf(inv_sqrt_fw_D)] = 0
+        inv_sqrt_bw_D = bw_D.pow(-0.5)
+        inv_sqrt_bw_D[torch.isinf(inv_sqrt_bw_D)] = 0
+
+        self.fw_A = inv_sqrt_fw_D.mm(fw_adj).mm(inv_sqrt_fw_D)
+        self.bw_A = inv_sqrt_bw_D.mm(bw_adj).mm(inv_sqrt_bw_D)
+        if args.dataset_name == 'iu_xray':
+            self.forward = self.forward_iu_xray
+        else:
+            self.forward = self.forward_mimic_cxr
+
+    def __str__(self):
+        model_parameters = filter(lambda p: p.requires_grad, self.parameters())
+        params = sum([np.prod(p.size()) for p in model_parameters])
+        return super().__str__() + '\nTrainable parameters: {}'.format(params)
+
+    def forward_iu_xray(self, images, targets=None, mode='train', update_opts={}):
+        # 获取图像特征
+        att_feats_0, fc_feats_0 = self.visual_extractor(images[:, 0])
+        att_feats_1, fc_feats_1 = self.visual_extractor(images[:, 1])
+        fc_feats = torch.cat((fc_feats_0, fc_feats_1), dim=1)
+
+        fw_A = self.fw_A.repeat(8, 1, 1)
+        bw_A = self.bw_A.repeat(8, 1, 1)
+        # 平均 正面和侧面视觉特征来初始化全局节点特征
+        global_feats1 = att_feats_0.mean(dim=(2, 3))
+        global_feats2 = att_feats_1.mean(dim=(2, 3))
+        # 空间注意机制初始化
+        att_feats_0 = self.cls_atten(att_feats_0)
+        att_feats_1 = self.cls_atten(att_feats_1)
+
+        att_feats_0 = torch.cat((global_feats1.unsqueeze(1), att_feats_0), dim=1)
+        att_feats_0 = self.zjxd_2(att_feats_0.transpose(1, 2)).transpose(1,2)
+        att_feats_1 = torch.cat((global_feats2.unsqueeze(1), att_feats_1), dim=1)
+        att_feats_1 = self.zjxd_2(att_feats_1.transpose(1, 2)).transpose(1,2)
+
+
+        att_feats = torch.cat((att_feats_0, att_feats_1), dim=1)
+        att_feats = self.zjxd(att_feats.transpose(1,2)).transpose(1,2)
+
+
+        if mode == 'train':
+            output = self.encoder_decoder(fc_feats, att_feats, targets, mode='forward')
+            # c_loss = self.criterionContrastive(fc_feats_0, fc_feats_1)
+            return output
+        elif mode == 'sample':
+            output, output_probs = self.encoder_decoder(fc_feats, att_feats, mode='sample', update_opts=update_opts)
+            return output, output_probs
+        else:
+            raise ValueError
+
+    def forward_mimic_cxr(self, images, targets=None, mode='train', update_opts={}):
+        att_feats, fc_feats = self.visual_extractor(images)
+        if mode == 'train':
+            output = self.encoder_decoder(fc_feats, att_feats, targets, mode='forward')
+            return output
+        elif mode == 'sample':
+            output, output_probs = self.encoder_decoder(fc_feats, att_feats, mode='sample', update_opts=update_opts)
+            return output, output_probs
+        else:
+            raise ValueError
