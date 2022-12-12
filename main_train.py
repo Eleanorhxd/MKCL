@@ -27,10 +27,10 @@ def parse_agrs():
     # Data loader settings
     parser.add_argument('--dataset_name', type=str, default='iu_xray', choices=['iu_xray', 'mimic_cxr'],
                         help='the dataset to be used.')
-    parser.add_argument('--max_seq_length', type=int, default=60, help='the maximum sequence length of the reports.') #60
+    parser.add_argument('--max_seq_length', type=int, default=60, help='the maximum sequence length of the reports.') 
     parser.add_argument('--threshold', type=int, default=3, help='the cut off frequency for the words.')
     parser.add_argument('--num_workers', type=int, default=0, help='the number of workers for dataloader.')
-    parser.add_argument('--batch_size', type=int, default=8, help='the number of samples for a batch') #16
+    parser.add_argument('--batch_size', type=int, default=16, help='the number of samples for a batch') 
 
     # Model settings (for visual extractor)
     parser.add_argument('--visual_extractor', type=str, default='resnet101', help='the visual extractor to be used.')
@@ -125,24 +125,16 @@ def main():
     test_dataloader = R2DataLoader(args, tokenizer, split='test', shuffle=False)
 
 
-    with open(r'D:\ehr\code\R2GenCMN-main\data\auxillary_openi_matrix_30nodes.txt', 'r') as matrix_file:
-        adjacency_matrix = [[int(num) for num in line.split(',')] for line in matrix_file]  # 31个节点的辅助矩阵/41个节点辅助
 
-    fw_adj = torch.tensor(adjacency_matrix, dtype=torch.float).to('cuda:0')
-    identity_matrix = torch.eye(args.num_classes).to('cuda:0')
-    bw_adj = fw_adj.t().to('cuda:0')
-    fw_adj = fw_adj.add(identity_matrix).to('cuda:0')
-    bw_adj = bw_adj.add(identity_matrix).to('cuda:0')
-    # print(bw_adj)
 
 
     # build model architecture
-    model = BaseCMNModel(args, tokenizer, args.num_classes, fw_adj,  bw_adj) #, fw_adj, bw_adj ,  args.num_classes, fw_adj,  bw_adj
+    model = BaseCMNModel(args, tokenizer, args.num_classes) 
 
     # get function handles of loss and metrics
     criterion = compute_loss
 
-    criterion_c = SupConLoss(temperature=0.07) # 0.05 0.07 0.1  0.15 0.2
+    criterion_c = SupConLoss(temperature=0.05) 
     metrics = compute_scores
 
     # build optimizer, learning rate scheduler
