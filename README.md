@@ -6,7 +6,7 @@ This is the implementation of [Medical Knowledge Enhanced Radiology Report Gener
 - `torchvision==0.8.2`
 - `opencv-python==4.4.0.42`
 # Datasets
-We use two datasets (IU X-Ray and MIMIC-CXR) in our paper.
+We use public IU X-Ray datasets IU X-Ray  in our paper.
 
 For `IU X-Ray`, you can download the dataset from [here](https://drive.google.com/file/d/1c0BXEuDy8Cmm2jfN0YYGkQxFZd2ZIoLg/view?usp=sharing) and then put the files in `data/iu_xray`.
 ## Train
