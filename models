@@ -26,7 +26,7 @@ class Attention(nn.Module):
         return context, alpha
 
 
-class BaseCMNModel(nn.Module):
+class BaseMKCLModel(nn.Module):
     def __init__(self, args, tokenizer, num_classes, fw_adj, bw_adj, feat_size=2048, embed_size=256, hidden_size=512): #, num_classes, fw_adj, bw_adj, feat_size=1024, embed_size=256, hidden_size=512
         super(BaseCMNModel, self).__init__()
         self.args = args
@@ -38,32 +38,8 @@ class BaseCMNModel(nn.Module):
         self.embed_size = embed_size
         self.hidden_size = hidden_size
         self.visual_extractor = VisualExtractor(args)
-        self.encoder_decoder = BaseCMN(args, tokenizer,)
-        self.cls_atten = ClsAttention(feat_size, num_classes)
-        self.gcn = GCN(feat_size, feat_size // 4)  
-        self.atten = Attention(hidden_size, feat_size)
-        self.zjxd = torch.nn.Linear(62, 98) #（62，98）(82,98)
-        self.zjxd_2 = torch.nn.Linear(32, 31) #（32，31） (42,41)
-
-        # pretrained embeddings
-        # self.embed = nn.Embedding.from_pretrained(torch.tensor(embds.vectors, dtype=torch.float64))
-        self.init_sent_h = nn.Linear(2 * feat_size // 2, hidden_size)
-        self.init_sent_c = nn.Linear(2 * feat_size // 2, hidden_size)
-
-        fw_D = torch.diag_embed(fw_adj.sum(dim=1))
-        bw_D = torch.diag_embed(bw_adj.sum(dim=1))
-        inv_sqrt_fw_D = fw_D.pow(-0.5)
-        inv_sqrt_fw_D[torch.isinf(inv_sqrt_fw_D)] = 0
-        inv_sqrt_bw_D = bw_D.pow(-0.5)
-        inv_sqrt_bw_D[torch.isinf(inv_sqrt_bw_D)] = 0
-
-        self.fw_A = inv_sqrt_fw_D.mm(fw_adj).mm(inv_sqrt_fw_D)
-        self.bw_A = inv_sqrt_bw_D.mm(bw_adj).mm(inv_sqrt_bw_D)
-        if args.dataset_name == 'iu_xray':
-            self.forward = self.forward_iu_xray
-        else:
-            self.forward = self.forward_mimic_cxr
-
+        self.encoder_decoder = BaseMKCL(args, tokenizer,)
+  
     def __str__(self):
         model_parameters = filter(lambda p: p.requires_grad, self.parameters())
         params = sum([np.prod(p.size()) for p in model_parameters])
@@ -75,10 +51,7 @@ class BaseCMNModel(nn.Module):
         att_feats_1, fc_feats_1 = self.visual_extractor(images[:, 1])
         fc_feats = torch.cat((fc_feats_0, fc_feats_1), dim=1)
 
-        fw_A = self.fw_A.repeat(8, 1, 1)
-        bw_A = self.bw_A.repeat(8, 1, 1)
       
-
         att_feats_0 = torch.cat((global_feats1.unsqueeze(1), att_feats_0), dim=1)
     
         att_feats_1 = torch.cat((global_feats2.unsqueeze(1), att_feats_1), dim=1)
