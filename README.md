@@ -30,3 +30,6 @@ Run `bash train_iu_xray.sh` to train a model on the IU X-Ray data.
 ## Test
 
 Run `bash test_iu_xray.sh` to test a model on the IU X-Ray data.
+
+## Acknowledgment
+This work is supported by grant from the Natural Science Foundation of China (No. 62072070)
