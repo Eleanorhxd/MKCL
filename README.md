@@ -1,5 +1,10 @@
 # MKCL
 This is the implementation of [Medical Knowledge Enhanced Radiology Report Generation with Contrastive Learning]
+
+# Contribution
+- `This paper proposes a model MKCL, which uses IU Medical Knowledge Graph (IU-MKG) to mine the relationship among medical findings and supply medical information for the accuracy of the radiologic report. We propose Knowledge Enhanced Attention mechanism (KEA) to combine IU-MKG and extracted CT visual features, which can alleviate textual data bias and generate high-quality reports.`
+- `This paper employs supervised contrastive learning to significantly capture abnormal areas in radiologic images and ease unlabeled medical images. Furthermore, we introduce a supervised contrastive loss to tackle a relatively narrow text distribution with the reports and alleviate normal phenomena that are frequently described in medical reports.`
+- `We have conducted extensive comprehensive experiments on the publicly available IU X-Ray dataset. The experimental results prove the proposed modelMKCL has a better performance of multiple state-of-the-art methods in image captioning and radiology report generation.`
 ## Requirements
 
 - `python==3.7`
