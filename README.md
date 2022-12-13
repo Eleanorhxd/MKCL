@@ -15,8 +15,11 @@ We use public IU X-Ray datasets in our paper.
 For `IU X-Ray`, you can download the dataset from [here](https://drive.google.com/file/d/1c0BXEuDy8Cmm2jfN0YYGkQxFZd2ZIoLg/view?usp=sharing) and then put the files in `data/iu_xray`.
 ## codes
 models.py:This file contains the overall network architecture of MKCL.
+
 utils:This file contains some defined functions.
+
 main_train.py:This file trains the MKCL model.
+
 main_test.py:This file tests the MKCL model.
 
 
