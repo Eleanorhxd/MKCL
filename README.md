@@ -2,7 +2,7 @@
  MKCL: Medical Knowledge Enhanced Radiology Report Generation with Contrastive Learning
 
 ## Overview
-This repository contains code necessary to run KDGN model. 
+This repository contains code necessary to run MKCL model. 
 
 ## Requirements
 - `torch:1.11.0+cu111`
@@ -13,6 +13,14 @@ This repository contains code necessary to run KDGN model.
 We use public IU X-Ray datasets in our paper.
 
 For `IU X-Ray`, you can download the dataset from [here](https://drive.google.com/file/d/1c0BXEuDy8Cmm2jfN0YYGkQxFZd2ZIoLg/view?usp=sharing) and then put the files in `data/iu_xray`.
+
+| Dataset | TRAIN | VAL | TEST |
+| :------ | --------: | --------: | -----: |
+| IMAGE# | 5,226 | 748 | 1,496 |
+| REPORT# | 2,770 | 395 | 790 |
+| PATIENT# | 2,770 | 395 | 790 |
+| AVG.LEN | 37.56 | 36.78 | 33.62 |
+
 ## codes
 models.py:This file contains the overall network architecture of MKCL.
 
