@@ -129,7 +129,7 @@ def main():
 
 
     # build model architecture
-    model = BaseCMNModel(args, tokenizer, args.num_classes) 
+    model = BaseMKCLModel(args, tokenizer, args.num_classes) 
 
     # get function handles of loss and metrics
     criterion = compute_loss
