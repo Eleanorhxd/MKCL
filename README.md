@@ -1,5 +1,5 @@
 # MKCL
-This is the implementation of [Medical Knowledge Enhanced Radiology Report Generation with Contrastive Learning]
+ MKCL: Medical Knowledge Enhanced Radiology Report Generation with Contrastive Learning
 
 # Contribution
 - `This paper proposes a model MKCL, which uses IU Medical Knowledge Graph (IU-MKG) to mine the relationship among medical findings and supply medical information for the accuracy of the radiologic report. We propose Knowledge Enhanced Attention mechanism (KEA) to combine IU-MKG and extracted CT visual features, which can alleviate textual data bias and generate high-quality reports.`
