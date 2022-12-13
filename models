@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from modules.base_cmn import BaseCMN
+from modules.base_mkcl import BaseMKCL
 from modules.visual_extractor import VisualExtractor
 from torch.nn.parameter import Parameter
 from modules.contrastive_loss import SupConLoss
@@ -72,13 +72,4 @@ class BaseMKCLModel(nn.Module):
         else:
             raise ValueError
 
-    def forward_mimic_cxr(self, images, targets=None, mode='train', update_opts={}):
-        att_feats, fc_feats = self.visual_extractor(images)
-        if mode == 'train':
-            output = self.encoder_decoder(fc_feats, att_feats, targets, mode='forward')
-            return output
-        elif mode == 'sample':
-            output, output_probs = self.encoder_decoder(fc_feats, att_feats, mode='sample', update_opts=update_opts)
-            return output, output_probs
-        else:
-            raise ValueError
+   
